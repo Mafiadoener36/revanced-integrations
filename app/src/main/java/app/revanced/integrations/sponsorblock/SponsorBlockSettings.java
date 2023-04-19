@@ -2,7 +2,7 @@ package app.revanced.integrations.sponsorblock;
 
 import static app.revanced.integrations.sponsorblock.StringRef.sf;
 
-import android.app.Activity;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import app.revanced.integrations.settings.SettingsEnum;
+import app.revanced.integrations.utils.LogHelper;
 import app.revanced.integrations.utils.SharedPrefHelper;
 
 public class SponsorBlockSettings {
@@ -24,8 +25,10 @@ public class SponsorBlockSettings {
     public static final SegmentBehaviour DefaultBehaviour = SegmentBehaviour.IGNORE;
     public static String sponsorBlockUrlCategories = "[]";
 
-    public static void update(Activity _activity) {
-        SharedPreferences preferences = SharedPrefHelper.getPreferences(SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK);
+    public static void update(Context context) {
+        if (context == null) return;
+
+        SharedPreferences preferences = SharedPrefHelper.getPreferences(context, SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK);
 
         if (!SettingsEnum.SB_ENABLED.getBoolean()) {
             SkipSegmentView.hide();
@@ -83,7 +86,7 @@ public class SponsorBlockSettings {
             sponsorBlockUrlCategories = "[%22" + TextUtils.join("%22,%22", enabledCategories) + "%22]";
 
         String uuid = SettingsEnum.SB_UUID.getString();
-        if (uuid == null || uuid.length() == 0) {
+        if (uuid == null) {
             uuid = (UUID.randomUUID().toString() +
                     UUID.randomUUID().toString() +
                     UUID.randomUUID().toString())

@@ -7,8 +7,8 @@ import app.revanced.integrations.utils.Event
  */
 @Suppress("unused")
 enum class PlayerType {
-    NONE, // includes Shorts playback
-    HIDDEN, // also includes YouTube Shorts and Stories, if a regular video is minimized and a Short/Story is then opened
+    NONE,
+    HIDDEN,
     WATCH_WHILE_MINIMIZED,
     WATCH_WHILE_MAXIMIZED,
     WATCH_WHILE_FULLSCREEN,
@@ -42,21 +42,11 @@ enum class PlayerType {
                 currentPlayerType = value
                 onChange(currentPlayerType)
             }
-        @Volatile // value is read/write from different threads
         private var currentPlayerType = NONE
 
         /**
          * player type change listener
          */
         val onChange = Event<PlayerType>()
-    }
-
-    /**
-     * Check if the current player type is [NONE] or [HIDDEN]
-     *
-     * @return True, if nothing, a Short, or a Story is playing.
-     */
-    fun isNoneOrHidden(): Boolean {
-        return this == NONE || this == HIDDEN
     }
 }

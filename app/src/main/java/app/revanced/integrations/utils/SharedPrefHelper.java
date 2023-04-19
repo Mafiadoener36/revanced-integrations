@@ -3,41 +3,29 @@ package app.revanced.integrations.utils;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import java.util.Objects;
-
 public class SharedPrefHelper {
-    public static void saveString(SharedPrefNames prefName, String key, String value) {
-        getPreferences(prefName).edit().putString(key, value).apply();
+    public static void saveString(Context context, SharedPrefNames prefName, String key, String value) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
+        sharedPreferences.edit().putString(key, value).apply();
     }
 
-    public static void saveBoolean(SharedPrefNames prefName, String key, boolean value) {
-        getPreferences(prefName).edit().putBoolean(key, value).apply();
+    public static void saveBoolean(Context context, SharedPrefNames prefName, String key, Boolean value) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
+        sharedPreferences.edit().putBoolean(key, value).apply();
     }
 
-    public static void saveFloat(SharedPrefNames prefName, String key, float value) {
-        getPreferences(prefName).edit().putFloat(key, value).apply();
+    public static String getString(Context context, SharedPrefNames prefName, String key, String _default) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
+        return (sharedPreferences.getString(key, _default));
     }
 
-    public static void saveInt(SharedPrefNames prefName, String key, int value) {
-        getPreferences(prefName).edit().putInt(key, value).apply();
+    public static Boolean getBoolean(Context context, SharedPrefNames prefName, String key, Boolean _default) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
+        return (sharedPreferences.getBoolean(key, _default));
     }
 
-    public static void saveLong(SharedPrefNames prefName, String key, long value) {
-        getPreferences(prefName).edit().putLong(key, value).apply();
-    }
-
-    public static String getString(SharedPrefNames prefName, String key, String _default) {
-        return getPreferences(prefName).getString(key, _default);
-    }
-
-    public static boolean getBoolean(SharedPrefNames prefName, String key, boolean _default) {
-        return getPreferences(prefName).getBoolean(key, _default);
-    }
-
-    // region Hack, unknown why required
-
-    public static Long getLong(SharedPrefNames prefName, String key, Long _default) {
-        SharedPreferences sharedPreferences = getPreferences(prefName);
+    public static Long getLong(Context context, SharedPrefNames prefName, String key, Long _default) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
         try {
             return Long.valueOf(sharedPreferences.getString(key, _default + ""));
         } catch (ClassCastException ex) {
@@ -45,8 +33,8 @@ public class SharedPrefHelper {
         }
     }
 
-    public static Float getFloat(SharedPrefNames prefName, String key, Float _default) {
-        SharedPreferences sharedPreferences = getPreferences(prefName);
+    public static Float getFloat(Context context, SharedPrefNames prefName, String key, Float _default) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
         try {
             return Float.valueOf(sharedPreferences.getString(key, _default + ""));
         } catch (ClassCastException ex) {
@@ -54,8 +42,8 @@ public class SharedPrefHelper {
         }
     }
 
-    public static Integer getInt(SharedPrefNames prefName, String key, Integer _default) {
-        SharedPreferences sharedPreferences = getPreferences(prefName);
+    public static Integer getInt(Context context, SharedPrefNames prefName, String key, Integer _default) {
+        SharedPreferences sharedPreferences = getPreferences(context, prefName);
         try {
             return Integer.valueOf(sharedPreferences.getString(key, _default + ""));
         } catch (ClassCastException ex) {
@@ -63,10 +51,14 @@ public class SharedPrefHelper {
         }
     }
 
-    // endregion
+    public static SharedPreferences getPreferences(Context context, SharedPrefNames name) {
+        if (context == null) return null;
+        return context.getSharedPreferences(name.getName(), Context.MODE_PRIVATE);
+    }
 
-    public static SharedPreferences getPreferences(SharedPrefNames name) {
-        return Objects.requireNonNull(ReVancedUtils.getContext()).getSharedPreferences(name.getName(), Context.MODE_PRIVATE);
+    public static SharedPreferences getPreferences(Context context, String name) {
+        if (context == null) return null;
+        return context.getSharedPreferences(name, Context.MODE_PRIVATE);
     }
 
     public enum SharedPrefNames {

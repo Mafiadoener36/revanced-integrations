@@ -6,10 +6,6 @@ import android.content.res.Resources;
 import android.os.Handler;
 import android.os.Looper;
 
-import androidx.annotation.NonNull;
-
-import java.text.Bidi;
-import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -40,7 +36,7 @@ public class ReVancedUtils {
      * All tasks run at max thread priority.
      */
     private static final ThreadPoolExecutor backgroundThreadPool = new ThreadPoolExecutor(
-            2, // minimum 2 threads always ready to be used
+            1, // minimum 1 thread always ready to be used
             10, // For any threads over the minimum, keep them alive 10 seconds after they go idle
             SHARED_THREAD_POOL_MAXIMUM_BACKGROUND_THREADS,
             TimeUnit.SECONDS,
@@ -60,6 +56,10 @@ public class ReVancedUtils {
             // or some ReVanced code is submitting an unexpected number of background tasks.
             LogHelper.printException(() -> "Reached maximum background thread count of "
                     + SHARED_THREAD_POOL_MAXIMUM_BACKGROUND_THREADS + " threads");
+
+            // Because this condition will manifest as a slow running app or a memory leak,
+            // it might be best to show the user a toast or some other suggestion to restart the app.
+            // TODO? if debug is enabled, show a toast?
         }
     }
 
@@ -94,7 +94,7 @@ public class ReVancedUtils {
             Resources res = context.getResources();
             return res.getIdentifier(name, type, context.getPackageName());
         } catch (Throwable exception) {
-            LogHelper.printException(() -> "Resource not found.", exception);
+            LogHelper.printException(() -> ("Resource not found."), exception);
             return null;
         }
     }
@@ -116,75 +116,50 @@ public class ReVancedUtils {
         if (context != null) {
             return context;
         } else {
-            LogHelper.printException(() -> "Context is null, returning null!");
+            LogHelper.printException(() -> ("Context is null, returning null!"));
             return null;
         }
-    }
-
-    public static void setClipboard(String text) {
-        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-        android.content.ClipData clip = android.content.ClipData.newPlainText("ReVanced", text);
-        clipboard.setPrimaryClip(clip);
     }
 
     public static boolean isTablet(Context context) {
         return context.getResources().getConfiguration().smallestScreenWidthDp >= 600;
     }
 
-    private static Boolean isRightToLeftTextLayout;
-    /**
-     * If the device language uses right to left text layout (hebrew, arabic, etc)
-     */
-    public static boolean isRightToLeftTextLayout() {
-        if (isRightToLeftTextLayout == null) {
-            String displayLanguage = Locale.getDefault().getDisplayLanguage();
-            isRightToLeftTextLayout = new Bidi(displayLanguage, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).isRightToLeft();
-        }
-        return isRightToLeftTextLayout;
-    }
-
     /**
      * Automatically logs any exceptions the runnable throws
      */
     public static void runOnMainThread(Runnable runnable) {
-        runOnMainThreadDelayed(runnable, 0);
-    }
-
-    /**
-     * Automatically logs any exceptions the runnable throws
-     */
-    public static void runOnMainThreadDelayed(Runnable runnable, long delayMillis) {
-        Runnable loggingRunnable = () -> {
+        Runnable exceptLoggingRunnable = () -> {
             try {
                 runnable.run();
             } catch (Exception ex) {
-                LogHelper.printException(() -> runnable.getClass() + ": " + ex.getMessage(), ex);
+                LogHelper.printException(() -> "Exception on main thread from runnable: " + runnable.toString(), ex);
             }
         };
-        new Handler(Looper.getMainLooper()).postDelayed(loggingRunnable, delayMillis);
+        new Handler(Looper.getMainLooper()).post(exceptLoggingRunnable);
     }
 
     /**
      * @return if the calling thread is on the main thread
      */
-    public static boolean currentlyIsOnMainThread() {
+    public static boolean currentIsOnMainThread() {
         return Looper.getMainLooper().isCurrentThread();
     }
 
     /**
-     * @throws IllegalStateException if the calling thread is _off_ the main thread
+     * @throws IllegalStateException if the calling thread is _not_ on the main thread
      */
     public static void verifyOnMainThread() throws IllegalStateException {
-        if (!currentlyIsOnMainThread()) {
+        if (!currentIsOnMainThread()) {
             throw new IllegalStateException("Must call _on_ the main thread");
         }
     }
 
     /**
-     * @throws IllegalStateException if the calling thread is _on_ the main thread
+     * @throws IllegalStateException if the calling thread _is_ on the main thread
      */
     public static void verifyOffMainThread() throws IllegalStateException {
-        if (currentlyIsOnMainThread()) {
+        if (currentIsOnMainThread()) {
             throw new IllegalStateException("Must call _off_ the main thread");
         }
     }

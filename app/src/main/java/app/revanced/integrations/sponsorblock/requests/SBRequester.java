@@ -31,8 +31,6 @@ import app.revanced.integrations.sponsorblock.SponsorBlockUtils;
 import app.revanced.integrations.sponsorblock.SponsorBlockUtils.VoteOption;
 import app.revanced.integrations.sponsorblock.objects.SponsorSegment;
 import app.revanced.integrations.sponsorblock.objects.UserStats;
-import app.revanced.integrations.utils.ReVancedUtils;
-import app.revanced.integrations.utils.LogHelper;
 
 public class SBRequester {
     private static final String TIME_TEMPLATE = "%.3f";
@@ -81,7 +79,7 @@ public class SBRequester {
             }
             connection.disconnect();
         } catch (Exception ex) {
-            LogHelper.printException(() -> "failed to get segments", ex);
+            ex.printStackTrace();
         }
         return segments.toArray(new SponsorSegment[0]);
     }
@@ -117,7 +115,7 @@ public class SBRequester {
             runOnMainThread(toastRunnable);
             connection.disconnect();
         } catch (Exception ex) {
-            LogHelper.printException(() -> "failed to submit segments", ex);
+            ex.printStackTrace();
         }
     }
 
@@ -126,16 +124,18 @@ public class SBRequester {
             HttpURLConnection connection = getConnectionFromRoute(SBRoutes.VIEWED_SEGMENT, segment.UUID);
             connection.disconnect();
         } catch (Exception ex) {
-            LogHelper.printException(() -> "failed to send view count request", ex);
+            ex.printStackTrace();
         }
     }
 
     public static void voteForSegment(SponsorSegment segment, VoteOption voteOption, Context context, String... args) {
-        ReVancedUtils.runOnBackgroundThread(() -> {
+        new Thread(() -> {
             try {
                 String segmentUuid = segment.UUID;
                 String uuid = SettingsEnum.SB_UUID.getString();
                 String vote = Integer.toString(voteOption == VoteOption.UPVOTE ? 1 : 0);
+
+                runOnMainThread(() -> Toast.makeText(context, str("vote_started"), Toast.LENGTH_SHORT).show());
 
                 HttpURLConnection connection = voteOption == VoteOption.CATEGORY_CHANGE
                         ? getConnectionFromRoute(SBRoutes.VOTE_ON_SEGMENT_CATEGORY, segmentUuid, uuid, args[0])
@@ -156,9 +156,9 @@ public class SBRequester {
                 runOnMainThread(() -> Toast.makeText(context, SponsorBlockUtils.messageToToast, Toast.LENGTH_LONG).show());
                 connection.disconnect();
             } catch (Exception ex) {
-                LogHelper.printException(() -> "failed to vote for segment", ex);
+                ex.printStackTrace();
             }
-        });
+        }).start();
     }
 
     public static void retrieveUserStats(PreferenceCategory category, Preference loadingPreference) {
@@ -167,22 +167,20 @@ public class SBRequester {
             return;
         }
 
-        ReVancedUtils.runOnBackgroundThread(() -> {
+        new Thread(() -> {
             try {
                 JSONObject json = getJSONObject(SBRoutes.GET_USER_STATS, SettingsEnum.SB_UUID.getString());
                 UserStats stats = new UserStats(json.getString("userName"), json.getDouble("minutesSaved"), json.getInt("segmentCount"),
                         json.getInt("viewCount"));
-                runOnMainThread(() -> { // get back on main thread to modify UI elements
-                    SponsorBlockUtils.addUserStats(category, loadingPreference, stats);
-                });
+                SponsorBlockUtils.addUserStats(category, loadingPreference, stats);
             } catch (Exception ex) {
-                LogHelper.printException(() -> "failed to retrieve user stats", ex);
+                ex.printStackTrace();
             }
-        });
+        }).start();
     }
 
     public static void setUsername(String username, EditTextPreference preference, Runnable toastRunnable) {
-        ReVancedUtils.runOnBackgroundThread(() -> {
+        new Thread(() -> {
             try {
                 HttpURLConnection connection = getConnectionFromRoute(SBRoutes.CHANGE_USERNAME, SettingsEnum.SB_UUID.getString(), username);
                 int responseCode = connection.getResponseCode();
@@ -199,9 +197,9 @@ public class SBRequester {
                 runOnMainThread(toastRunnable);
                 connection.disconnect();
             } catch (Exception ex) {
-                LogHelper.printException(() -> "failed to set username", ex);
+                ex.printStackTrace();
             }
-        });
+        }).start();
     }
 
     public static void runVipCheck() {
@@ -215,7 +213,7 @@ public class SBRequester {
             SettingsEnum.SB_IS_VIP.saveValue(vip);
             SettingsEnum.SB_LAST_VIP_CHECK.saveValue(now);
         } catch (Exception ex) {
-            LogHelper.printException(() -> "failed to check VIP", ex);
+            ex.printStackTrace();
         }
     }
 

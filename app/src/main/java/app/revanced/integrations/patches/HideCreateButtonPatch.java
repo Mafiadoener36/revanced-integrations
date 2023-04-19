@@ -10,7 +10,8 @@ public class HideCreateButtonPatch {
     //Used by app.revanced.patches.youtube.layout.createbutton.patch.CreateButtonRemoverPatch
     public static void hideCreateButton(View view) {
         boolean hidden = SettingsEnum.HIDE_CREATE_BUTTON.getBoolean();
-        LogHelper.printDebug(() -> "Create button: " + (hidden ? "hidden" : "shown"));
+        String message =  "Create button: " + (hidden ? "hidden" : "shown");
+        LogHelper.printDebug(() -> message);
         view.setVisibility(hidden ? View.GONE : View.VISIBLE);
     }
 }

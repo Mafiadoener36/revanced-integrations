@@ -46,12 +46,12 @@ import java.util.TimeZone;
 import app.revanced.integrations.settings.SettingsEnum;
 import app.revanced.integrations.sponsorblock.player.PlayerType;
 import app.revanced.integrations.utils.LogHelper;
-import app.revanced.integrations.utils.ReVancedUtils;
 import app.revanced.integrations.utils.SharedPrefHelper;
 import app.revanced.integrations.sponsorblock.objects.SponsorSegment;
 import app.revanced.integrations.sponsorblock.objects.UserStats;
 import app.revanced.integrations.sponsorblock.requests.SBRequester;
 
+@SuppressWarnings({"LongLogTag"})
 public abstract class SponsorBlockUtils {
     public static final String DATE_FORMAT = "HH:mm:ss.SSS";
     @SuppressLint("SimpleDateFormat")
@@ -154,7 +154,7 @@ public abstract class SponsorBlockUtils {
             Toast.makeText(context, str("submit_started"), Toast.LENGTH_SHORT).show();
 
             appContext = new WeakReference<>(context);
-            ReVancedUtils.runOnBackgroundThread(submitRunnable);
+            new Thread(submitRunnable).start();
         }
     };
     public static String messageToToast = "";
@@ -233,13 +233,13 @@ public abstract class SponsorBlockUtils {
         final SponsorBlockSettings.SegmentInfo segmentType = SponsorBlockUtils.newSponsorBlockSegmentType;
         try {
             if (start < 0 || end < 0 || start >= end || segmentType == null || videoId == null || uuid == null) {
-                LogHelper.printException(() -> "Unable to submit times, invalid parameters");
+                LogHelper.printException(() -> ("Unable to submit times, invalid parameters"));
                 return;
             }
             SBRequester.submitSegments(videoId, uuid, ((float) start) / 1000f, ((float) end) / 1000f, segmentType.key, toastRunnable);
             newSponsorSegmentEndMillis = newSponsorSegmentStartMillis = -1;
         } catch (Exception e) {
-            LogHelper.printException(() -> "Unable to submit segment", e);
+            LogHelper.printException(() -> ("Unable to submit segment"), e);
         }
 
         if (videoId != null)
@@ -403,15 +403,11 @@ public abstract class SponsorBlockUtils {
     }
 
     public static String appendTimeWithoutSegments(String totalTime) {
-        try {
-            if (videoHasSegments && (SettingsEnum.SB_ENABLED.getBoolean() && SettingsEnum.SB_SHOW_TIME_WITHOUT_SEGMENTS.getBoolean()) && !TextUtils.isEmpty(totalTime) && getCurrentVideoLength() > 1) {
-                if (timeWithoutSegments.isEmpty()) {
-                    timeWithoutSegments = getTimeWithoutSegments(sponsorSegmentsOfCurrentVideo);
-                }
-                return totalTime + timeWithoutSegments;
+        if (videoHasSegments && (SettingsEnum.SB_ENABLED.getBoolean() && SettingsEnum.SB_SHOW_TIME_WITHOUT_SEGMENTS.getBoolean()) && !TextUtils.isEmpty(totalTime) && getCurrentVideoLength() > 1) {
+            if (timeWithoutSegments.isEmpty()) {
+                timeWithoutSegments = getTimeWithoutSegments(sponsorSegmentsOfCurrentVideo);
             }
-        } catch (Exception ex) {
-            LogHelper.printException(() -> "appendTimeWithoutSegments failure", ex);
+            return totalTime + timeWithoutSegments;
         }
 
         return totalTime;
@@ -440,7 +436,7 @@ public abstract class SponsorBlockUtils {
                 PlayerController.setCurrentVideoId(null);
             }
         } catch (Exception ex) {
-            LogHelper.printException(() -> "Player type changed caused a crash.", ex);
+            LogHelper.printException(() -> ("Player type changed caused a crash."), ex);
         }
     }
 
@@ -474,7 +470,6 @@ public abstract class SponsorBlockUtils {
             category.addPreference(preference);
             String formatted = FORMATTER.format(stats.getSegmentCount());
             preference.setTitle(fromHtml(str("stats_submissions", formatted)));
-            preference.setSelectable(false);
         }
 
         {
@@ -508,7 +503,6 @@ public abstract class SponsorBlockUtils {
 
             preference.setTitle(fromHtml(str("stats_self_saved", formatted)));
             preference.setSummary(fromHtml(str("stats_self_saved_sum", formattedSaved)));
-            preference.setSelectable(false);
         }
     }
 
@@ -520,7 +514,7 @@ public abstract class SponsorBlockUtils {
             JSONArray categorySelectionsArray = settingsJson.getJSONArray("categorySelections");
 
 
-            SharedPreferences.Editor editor = SharedPrefHelper.getPreferences(SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK).edit();
+            SharedPreferences.Editor editor = SharedPrefHelper.getPreferences(context, SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK).edit();
 
             SponsorBlockSettings.SegmentInfo[] categories = SponsorBlockSettings.SegmentInfo.valuesWithoutUnsubmitted();
             for (SponsorBlockSettings.SegmentInfo category : categories) {
@@ -547,18 +541,25 @@ public abstract class SponsorBlockUtils {
                 editor.putString(category.key, behaviour.key);
             }
 
-            SettingsEnum.SB_UUID.saveValue(settingsJson.getString("userID"));
-            SettingsEnum.SB_IS_VIP.saveValue(settingsJson.getBoolean("isVip"));
-            SettingsEnum.SB_API_URL.saveValue(settingsJson.getString("serverAddress"));
             SettingsEnum.SB_SHOW_TOAST_WHEN_SKIP.saveValue(!settingsJson.getBoolean("dontShowNotice"));
             SettingsEnum.SB_SHOW_TIME_WITHOUT_SEGMENTS.saveValue(settingsJson.getBoolean("showTimeWithSkips"));
-            SettingsEnum.SB_MIN_DURATION.saveValue(Float.valueOf(settingsJson.getString("minDuration")));
             SettingsEnum.SB_COUNT_SKIPS.saveValue(settingsJson.getBoolean("trackViewCount"));
+            SettingsEnum.SB_IS_VIP.saveValue(settingsJson.getBoolean("isVip"));
+            SettingsEnum.SB_MIN_DURATION.saveValue(Float.valueOf(settingsJson.getString("minDuration")));
+            SettingsEnum.SB_UUID.saveValue(settingsJson.getString("userID"));
+            SettingsEnum.SB_LAST_VIP_CHECK.saveValue(settingsJson.getLong("lastIsVipUpdate"));
+
+
+            String serverAddress = settingsJson.getString("serverAddress");
+            if (serverAddress.equalsIgnoreCase("https://sponsor.ajay.app")) {
+                serverAddress = (String) SettingsEnum.SB_API_URL.getDefaultValue();
+            }
+            SettingsEnum.SB_API_URL.saveValue(serverAddress);
 
             Toast.makeText(context, str("settings_import_successful"), Toast.LENGTH_SHORT).show();
         } catch (Exception ex) {
-            LogHelper.printInfo(() -> "failed to import settings", ex); // use info level, as we are showing our own toast
             Toast.makeText(context, str("settings_import_failed"), Toast.LENGTH_SHORT).show();
+            ex.printStackTrace();
         }
     }
 
@@ -584,26 +585,27 @@ public abstract class SponsorBlockUtils {
                     categorySelectionsArray.put(behaviorObject);
                 }
             }
-            json.put("userID", SettingsEnum.SB_UUID.getString());
-            json.put("isVip", SettingsEnum.SB_IS_VIP.getBoolean());
-            json.put("serverAddress", SettingsEnum.SB_API_URL.getString());
             json.put("dontShowNotice", !SettingsEnum.SB_SHOW_TOAST_WHEN_SKIP.getBoolean());
+            json.put("barTypes", barTypesObject);
             json.put("showTimeWithSkips", SettingsEnum.SB_SHOW_TIME_WITHOUT_SEGMENTS.getBoolean());
             json.put("minDuration", SettingsEnum.SB_MIN_DURATION.getFloat());
             json.put("trackViewCount", SettingsEnum.SB_COUNT_SKIPS.getBoolean());
             json.put("categorySelections", categorySelectionsArray);
-            json.put("barTypes", barTypesObject);
+            json.put("userID", SettingsEnum.SB_UUID.getString());
+            json.put("isVip", SettingsEnum.SB_IS_VIP.getBoolean());
+            json.put("lastIsVipUpdate", SettingsEnum.SB_LAST_VIP_CHECK.getLong());
+            json.put("serverAddress", SettingsEnum.SB_API_URL.getString());
 
             return json.toString();
         } catch (Exception ex) {
-            LogHelper.printInfo(() -> "failed to export settings", ex); // use info level, as we are showing our own toast
             Toast.makeText(context, str("settings_export_failed"), Toast.LENGTH_SHORT).show();
+            ex.printStackTrace();
             return "";
         }
     }
 
     public static boolean isSBButtonEnabled(Context context, String key) {
-        return SettingsEnum.SB_ENABLED.getBoolean() && SharedPrefHelper.getBoolean(SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK, key, false);
+        return SettingsEnum.SB_ENABLED.getBoolean() && SharedPrefHelper.getBoolean(context, SharedPrefHelper.SharedPrefNames.SPONSOR_BLOCK, key, false);
     }
 
     public enum VoteOption {

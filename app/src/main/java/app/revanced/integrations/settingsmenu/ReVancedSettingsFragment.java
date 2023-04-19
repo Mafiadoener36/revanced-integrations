@@ -26,6 +26,7 @@ import app.revanced.integrations.settings.SettingsEnum;
 import app.revanced.integrations.utils.LogHelper;
 import app.revanced.integrations.utils.ReVancedUtils;
 import app.revanced.integrations.utils.SharedPrefHelper;
+import app.revanced.integrations.videoplayer.DownloadButton;
 
 public class ReVancedSettingsFragment extends PreferenceFragment {
 
@@ -66,12 +67,30 @@ public class ReVancedSettingsFragment extends PreferenceFragment {
                         value = Integer.parseInt(editPref.getText());
                         break;
                     default:
-                        LogHelper.printException(() -> "Setting has no valid return type! " + setting.getReturnType());
+                        LogHelper.printException(() -> ("Setting has no valid return type! " + setting.getReturnType()));
                         break;
                 }
                 setting.setValue(value);
+            } else if (pref instanceof ListPreference) {
+                ListPreference listPref = (ListPreference) pref;
+                if (setting == SettingsEnum.PREFERRED_VIDEO_SPEED) {
+                    try {
+                        String value = sharedPreferences.getString(setting.getPath(), setting.getDefaultValue() + "");
+                        listPref.setDefaultValue(value);
+                        listPref.setSummary(videoSpeedEntries[listPref.findIndexOfValue(value)]);
+                        SettingsEnum.PREFERRED_VIDEO_SPEED.saveValue(value);
+                    } catch (Throwable th) {
+                        LogHelper.printException(() -> ("Error setting value of speed" + th));
+                    }
+                } else {
+                    LogHelper.printException(() -> ("No valid setting found: " + setting.toString()));
+                }
+
+                if ("pref_download_button_list".equals(str)) {
+                    DownloadButton.refreshShouldBeShown();
+                }
             } else {
-                LogHelper.printException(() -> "Setting cannot be handled: " +  pref.getClass() + " " + pref.toString());
+                LogHelper.printException(() -> ("Setting cannot be handled! " + pref.toString()));
             }
 
             if (ReVancedUtils.getContext() != null && settingsInitialized && setting.shouldRebootOnChange()) {
@@ -96,7 +115,7 @@ public class ReVancedSettingsFragment extends PreferenceFragment {
 
             this.settingsInitialized = true;
         } catch (Throwable th) {
-            LogHelper.printException(() -> "Error during onCreate()", th);
+            LogHelper.printException(() -> ("Error during onCreate()"), th);
         }
     }
 
@@ -111,7 +130,7 @@ public class ReVancedSettingsFragment extends PreferenceFragment {
 
     private Preference findPreferenceOnScreen(CharSequence key) {
         if (key == null) {
-            LogHelper.printException(() -> "Key cannot be null!");
+            LogHelper.printException(() -> ("Key cannot be null!"));
             return null;
         }
         Preference pref = null;
@@ -144,7 +163,7 @@ public class ReVancedSettingsFragment extends PreferenceFragment {
     private String getPackageName() {
         Context context = ReVancedUtils.getContext();
         if (context == null) {
-            LogHelper.printException(() -> "Context is null, returning com.google.android.youtube!");
+            LogHelper.printException(() -> ("Context is null, returning com.google.android.youtube!"));
             return "com.google.android.youtube";
         }
         String PACKAGE_NAME = context.getPackageName();
@@ -169,7 +188,7 @@ public class ReVancedSettingsFragment extends PreferenceFragment {
             Resources res = context.getResources();
             return res.getString(res.getIdentifier(name, "string", context.getPackageName()));
         } catch (Throwable exception) {
-            LogHelper.printException(() -> "Resource not found.", exception);
+            LogHelper.printException(() -> ("Resource not found."), exception);
             return "";
         }
     }

@@ -5,20 +5,16 @@ import android.content.res.Resources;
 
 import androidx.annotation.NonNull;
 
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 
 import app.revanced.integrations.utils.LogHelper;
 import app.revanced.integrations.utils.ReVancedUtils;
 
-// should probably move this class into utils package
 public class StringRef {
     private static Resources resources;
     private static String packageName;
 
-    // must use a thread safe map, as this class is used both on and off the main thread
-    private static final Map<String, StringRef> strings = Collections.synchronizedMap(new HashMap());
+    private static final HashMap<String, StringRef> strings = new HashMap<>();
 
     /**
      * Gets strings reference from shared collection or creates if not exists yet,
@@ -94,20 +90,18 @@ public class StringRef {
     @NonNull
     public String toString() {
         if (!resolved) {
-            if (resources == null || packageName == null) {
-                Context context = ReVancedUtils.getContext();
-                resources = context.getResources();
-                packageName = context.getPackageName();
-            }
+            Context context = ReVancedUtils.getContext();
+            resources = context.getResources();
+            packageName = context.getPackageName();
             resolved = true;
             if (resources != null) {
                 final int identifier = resources.getIdentifier(value, "string", packageName);
                 if (identifier == 0)
-                    LogHelper.printException(() -> "Resource not found: " + value);
+                    LogHelper.printException(() -> ("Resource not found: " + value));
                 else
                     value = resources.getString(identifier);
             } else {
-                LogHelper.printException(() -> "Could not resolve resources!");
+                LogHelper.printException(() -> ("Could not resolve resources!"));
             }
         }
         return value;

@@ -1,13 +1,9 @@
 package app.revanced.integrations.returnyoutubedislike.requests;
 
-import static app.revanced.integrations.returnyoutubedislike.ReturnYouTubeDislike.Vote;
-
-import androidx.annotation.NonNull;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import app.revanced.integrations.utils.LogHelper;
+import java.util.Objects;
 
 /**
  * ReturnYouTubeDislike API estimated like/dislike/view counts.
@@ -16,7 +12,7 @@ import app.revanced.integrations.utils.LogHelper;
  * So these values may lag behind what YouTube shows.
  */
 public final class RYDVoteData {
-    @NonNull
+
     public final String videoId;
 
     /**
@@ -24,87 +20,46 @@ public final class RYDVoteData {
      */
     public final long viewCount;
 
-    private final long fetchedLikeCount;
-    private volatile long likeCount; // read/write from different threads
-    private volatile float likePercentage;
-
-    private final long fetchedDislikeCount;
-    private volatile long dislikeCount; // read/write from different threads
-    private volatile float dislikePercentage;
-
-    /**
-     * @throws JSONException if JSON parse error occurs, or if the values make no sense (ie: negative values)
-     */
-    public RYDVoteData(@NonNull JSONObject json) throws JSONException {
-        videoId = json.getString("id");
-        viewCount = json.getLong("viewCount");
-        fetchedLikeCount = json.getLong("likes");
-        fetchedDislikeCount = json.getLong("dislikes");
-        if (viewCount < 0 || fetchedLikeCount < 0 || fetchedDislikeCount < 0) {
-            throw new JSONException("Unexpected JSON values: " + json);
-        }
-        likeCount = fetchedLikeCount;
-        dislikeCount = fetchedDislikeCount;
-        updatePercentages();
-    }
-
     /**
      * Estimated like count
      */
-    public long getLikeCount() {
-        return likeCount;
-    }
+    public final long likeCount;
 
     /**
      * Estimated dislike count
      */
-    public long getDislikeCount() {
-        return dislikeCount;
-    }
+    public final long dislikeCount;
 
     /**
      * Estimated percentage of likes for all votes.  Value has range of [0, 1]
      *
      * A video with 400 positive votes, and 100 negative votes, has a likePercentage of 0.8
      */
-    public float getLikePercentage() {
-        return likePercentage;
-    }
+    public final float likePercentage;
 
     /**
      * Estimated percentage of dislikes for all votes. Value has range of [0, 1]
      *
      * A video with 400 positive votes, and 100 negative votes, has a dislikePercentage of 0.2
      */
-    public float getDislikePercentage() {
-        return dislikePercentage;
-    }
+    public final float dislikePercentage;
 
-    public void updateUsingVote(Vote vote) {
-        if (vote == Vote.LIKE) {
-            LogHelper.printDebug(() -> "Increasing like count");
-            likeCount = fetchedLikeCount + 1;
-            dislikeCount = fetchedDislikeCount;
-        } else if (vote == Vote.DISLIKE) {
-            LogHelper.printDebug(() -> "Increasing dislike count");
-            likeCount = fetchedLikeCount;
-            dislikeCount = fetchedDislikeCount + 1;
-        } else if (vote == Vote.LIKE_REMOVE) {
-            LogHelper.printDebug(() -> "Resetting like/dislike to fetched values");
-            likeCount = fetchedLikeCount;
-            dislikeCount = fetchedDislikeCount;
-        } else {
-            throw new IllegalStateException();
+    /**
+     * @throws JSONException if JSON parse error occurs, or if the values make no sense (ie: negative values)
+     */
+    public RYDVoteData(JSONObject json) throws JSONException {
+        Objects.requireNonNull(json);
+        videoId = json.getString("id");
+        viewCount = json.getLong("viewCount");
+        likeCount = json.getLong("likes");
+        dislikeCount = json.getLong("dislikes");
+        if (likeCount < 0 || dislikeCount < 0 || viewCount < 0) {
+            throw new JSONException("Unexpected JSON values: " + json);
         }
-        updatePercentages();
+        likePercentage = (likeCount == 0 ? 0 : (float)likeCount / (likeCount + dislikeCount));
+        dislikePercentage = (dislikeCount == 0 ? 0 : (float)dislikeCount / (likeCount + dislikeCount));
     }
 
-    private void updatePercentages() {
-        likePercentage = (likeCount == 0 ? 0 : (float) likeCount / (likeCount + dislikeCount));
-        dislikePercentage = (dislikeCount == 0 ? 0 : (float) dislikeCount / (likeCount + dislikeCount));
-    }
-
-    @NonNull
     @Override
     public String toString() {
         return "RYDVoteData{"
@@ -118,5 +73,4 @@ public final class RYDVoteData {
     }
 
     // equals and hashcode is not implemented (currently not needed)
-
 }

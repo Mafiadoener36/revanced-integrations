@@ -29,27 +29,18 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
      */
     private SwitchPreference percentagePreference;
 
-    /**
-     * If segmented like/dislike button uses smaller compact layout
-     */
-    private SwitchPreference compactLayoutPreference;
-
     private void updateUIState() {
         final boolean rydIsEnabled = SettingsEnum.RYD_ENABLED.getBoolean();
+        final boolean dislikePercentageEnabled = SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getBoolean();
 
         enabledPreference.setSummary(rydIsEnabled
                 ? str("revanced_ryd_enable_summary_on")
                 : str("revanced_ryd_enable_summary_off"));
 
-        percentagePreference.setSummary(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getBoolean()
+        percentagePreference.setSummary(dislikePercentageEnabled
                 ? str("revanced_ryd_dislike_percentage_summary_on")
                 : str("revanced_ryd_dislike_percentage_summary_off"));
         percentagePreference.setEnabled(rydIsEnabled);
-
-        compactLayoutPreference.setSummary(SettingsEnum.RYD_USE_COMPACT_LAYOUT.getBoolean()
-                ? str("revanced_ryd_compact_layout_summary_on")
-                : str("revanced_ryd_compact_layout_summary_off"));
-        compactLayoutPreference.setEnabled(rydIsEnabled);
     }
 
     @Override
@@ -62,6 +53,8 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
         setPreferenceScreen(preferenceScreen);
 
         enabledPreference = new SwitchPreference(context);
+        enabledPreference.setKey(SettingsEnum.RYD_ENABLED.getPath());
+        enabledPreference.setDefaultValue(SettingsEnum.RYD_ENABLED.getDefaultValue());
         enabledPreference.setChecked(SettingsEnum.RYD_ENABLED.getBoolean());
         enabledPreference.setTitle(str("revanced_ryd_enable_title"));
         enabledPreference.setOnPreferenceChangeListener((pref, newValue) -> {
@@ -75,6 +68,8 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
         preferenceScreen.addPreference(enabledPreference);
 
         percentagePreference = new SwitchPreference(context);
+        percentagePreference.setKey(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getPath());
+        percentagePreference.setDefaultValue(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getDefaultValue());
         percentagePreference.setChecked(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getBoolean());
         percentagePreference.setTitle(str("revanced_ryd_dislike_percentage_title"));
         percentagePreference.setOnPreferenceChangeListener((pref, newValue) -> {
@@ -84,17 +79,6 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
             return true;
         });
         preferenceScreen.addPreference(percentagePreference);
-
-        compactLayoutPreference = new SwitchPreference(context);
-        compactLayoutPreference.setChecked(SettingsEnum.RYD_USE_COMPACT_LAYOUT.getBoolean());
-        compactLayoutPreference.setTitle(str("revanced_ryd_compact_layout_title"));
-        compactLayoutPreference.setOnPreferenceChangeListener((pref, newValue) -> {
-            SettingsEnum.RYD_USE_COMPACT_LAYOUT.saveValue((Boolean)newValue);
-
-            updateUIState();
-            return true;
-        });
-        preferenceScreen.addPreference(compactLayoutPreference);
 
         updateUIState();
 

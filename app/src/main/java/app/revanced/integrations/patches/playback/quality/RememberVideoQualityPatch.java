@@ -2,16 +2,18 @@ package app.revanced.integrations.patches.playback.quality;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.widget.Toast;
-import app.revanced.integrations.settings.SettingsEnum;
-import app.revanced.integrations.utils.LogHelper;
-import app.revanced.integrations.utils.ReVancedUtils;
-import app.revanced.integrations.utils.SharedPrefHelper;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+
+import app.revanced.integrations.settings.SettingsEnum;
+import app.revanced.integrations.utils.LogHelper;
+import app.revanced.integrations.utils.ReVancedUtils;
+import app.revanced.integrations.utils.SharedPrefHelper;
 
 public class RememberVideoQualityPatch {
 
@@ -21,37 +23,37 @@ public class RememberVideoQualityPatch {
 
     public static void changeDefaultQuality(int defaultQuality) {
         Context context = ReVancedUtils.getContext();
-
-        var networkType = getNetworType(context);
-
-        if (networkType == NetworkType.NONE) {
-            String message = "No internet connection.";
-            LogHelper.printDebug(() -> message);
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
-        } else {
-            var preferenceKey = "wifi_quality";
-            var networkTypeMessage = "WIFI";
-
-            if (networkType == NetworkType.MOBILE) {
-                networkTypeMessage = "mobile";
-                preferenceKey = "mobile_quality";
+        if (isConnectedWifi(context)) {
+            try {
+                SharedPrefHelper.saveString(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "wifi_quality", defaultQuality + "");
+            } catch (Exception ex) {
+                LogHelper.printException(() -> ("Failed to change default WI-FI quality:" + ex));
+                Toast.makeText(context, "Failed to change default WI-FI quality:", Toast.LENGTH_SHORT).show();
             }
-
-            SharedPrefHelper.saveString(SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, preferenceKey, defaultQuality + "");
-            String message = "Changing default " + networkTypeMessage + " quality to: " + defaultQuality;
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+            LogHelper.printDebug(() -> "Changing default Wi-Fi quality to: " + defaultQuality);
+            Toast.makeText(context, "Changing default Wi-Fi quality to: " + defaultQuality, Toast.LENGTH_SHORT).show();
+        } else if (isConnectedMobile(context)) {
+            try {
+                SharedPrefHelper.saveString(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "mobile_quality", defaultQuality + "");
+            } catch (Exception ex) {
+                LogHelper.printDebug(() -> "Failed to change default mobile data quality" + ex);
+                Toast.makeText(context, "Failed to change default mobile data quality", Toast.LENGTH_SHORT).show();
+            }
+            LogHelper.printDebug(() -> "Changing default mobile data quality to:" + defaultQuality);
+            Toast.makeText(context, "Changing default mobile data quality to:" + defaultQuality, Toast.LENGTH_SHORT).show();
+        } else {
+            LogHelper.printDebug(() -> "No internet connection.");
+            Toast.makeText(context, "No internet connection.", Toast.LENGTH_SHORT).show();
         }
-
         userChangedQuality = false;
     }
 
     public static int setVideoQuality(Object[] qualities, int quality, Object qInterface, String qIndexMethod) {
+        int preferredQuality;
         Field[] fields;
-
         if (!(newVideo || userChangedQuality) || qInterface == null) {
             return quality;
         }
-
         Class<?> intType = Integer.TYPE;
         ArrayList<Integer> iStreamQualities = new ArrayList<>();
         try {
@@ -86,52 +88,56 @@ public class RememberVideoQualityPatch {
         LogHelper.printDebug(() -> "Quality: " + qualityToLog);
         Context context = ReVancedUtils.getContext();
         if (context == null) {
-            LogHelper.printException(() -> "Context is null or settings not initialized, returning quality: " + qualityToLog);
+            LogHelper.printException(() -> ("Context is null or settings not initialized, returning quality: " + qualityToLog));
             return quality;
         }
-        var networkType = getNetworType(context);
-        if (networkType == NetworkType.NONE) {
+        if (isConnectedWifi(context)) {
+            preferredQuality = SharedPrefHelper.getInt(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "wifi_quality", -2);
+            LogHelper.printDebug(() -> "Wi-Fi connection detected, preferred quality: " + preferredQuality);
+        } else if (isConnectedMobile(context)) {
+            preferredQuality = SharedPrefHelper.getInt(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "mobile_quality", -2);
+            LogHelper.printDebug(() -> "Mobile data connection detected, preferred quality: " + preferredQuality);
+        } else {
             LogHelper.printDebug(() -> "No Internet connection!");
             return quality;
-        } else {
-            var preferenceKey = "wifi_quality";
-            if (networkType == NetworkType.MOBILE) preferenceKey = "mobile_quality";
-
-            int preferredQuality = SharedPrefHelper.getInt(SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, preferenceKey, -2);
-            if (preferredQuality == -2) return quality;
-
-            for (int streamQuality2 : iStreamQualities) {
-                final int indexToLog = index;
-                LogHelper.printDebug(() -> "Quality at index " + indexToLog + ": " + streamQuality2);
-                index++;
+        }
+        if (preferredQuality == -2) {
+            return quality;
+        }
+        for (int streamQuality2 : iStreamQualities) {
+            final int indexToLog = index;
+            LogHelper.printDebug(() -> "Quality at index " + indexToLog + ": " + streamQuality2);
+            index++;
+        }
+        for (Integer iStreamQuality : iStreamQualities) {
+            int streamQuality3 = iStreamQuality;
+            if (streamQuality3 <= preferredQuality) {
+                quality = streamQuality3;
             }
-            for (Integer iStreamQuality : iStreamQualities) {
-                int streamQuality3 = iStreamQuality;
-                if (streamQuality3 <= preferredQuality) {
-                    quality = streamQuality3;
-                }
-            }
-            if (quality == -2) return quality;
-
-            int qualityIndex = iStreamQualities.indexOf(quality);
-            final int qualityToLog2 = quality;
-            LogHelper.printDebug(() -> "Index of quality " + qualityToLog2 + " is " + qualityIndex);
-            try {
-                Class<?> cl = qInterface.getClass();
-                Method m = cl.getMethod(qIndexMethod, Integer.TYPE);
-                LogHelper.printDebug(() -> "Method is: " + qIndexMethod);
-                m.invoke(qInterface, iStreamQualities.get(qualityIndex));
-                LogHelper.printDebug(() -> "Quality changed to: " + qualityIndex);
-                return qualityIndex;
-            } catch (Exception ex) {
-                LogHelper.printException(() -> "Failed to set quality", ex);
-                return qualityIndex;
-            }
+        }
+        if (quality == -2) {
+            return quality;
+        }
+        int qualityIndex = iStreamQualities.indexOf(quality);
+        final int qualityToLog2 = quality;
+        LogHelper.printDebug(() -> "Index of quality " + qualityToLog2 + " is " + qualityIndex);
+        try {
+            Class<?> cl = qInterface.getClass();
+            Method m = cl.getMethod(qIndexMethod, Integer.TYPE);
+            LogHelper.printDebug(() -> "Method is: " + qIndexMethod);
+            m.invoke(qInterface, iStreamQualities.get(qualityIndex));
+            LogHelper.printDebug(() -> "Quality changed to: " + qualityIndex);
+            return qualityIndex;
+        } catch (Exception ex) {
+            LogHelper.printException(() -> ("Failed to set quality"), ex);
+            Toast.makeText(context, "Failed to set quality", Toast.LENGTH_SHORT).show();
+            return qualityIndex;
         }
     }
 
     public static void userChangedQuality(int selectedQuality) {
-        if (!SettingsEnum.REMEMBER_VIDEO_QUALITY_LAST_SELECTED.getBoolean()) return;
+        // Do not remember a **new** quality if REMEMBER_VIDEO_QUALITY is false
+        if (SettingsEnum.REMEMBER_VIDEO_QUALITY_LAST_SELECTED.getBoolean() == false) return;
 
         selectedQuality1 = selectedQuality;
         userChangedQuality = true;
@@ -141,23 +147,19 @@ public class RememberVideoQualityPatch {
         newVideo = true;
     }
 
-    private static NetworkType getNetworType(Context context) {
+    private static NetworkInfo getNetworkInfo(Context context) {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        var networkInfo = cm.getActiveNetworkInfo();
-
-        if (networkInfo == null || !networkInfo.isConnected()) {
-            return NetworkType.NONE;
-        } else {
-            var type = networkInfo.getType();
-
-            return type == ConnectivityManager.TYPE_MOBILE || type == ConnectivityManager.TYPE_BLUETOOTH ? NetworkType.MOBILE : NetworkType.OTHER;
-        }
+        return cm.getActiveNetworkInfo();
     }
 
-    enum NetworkType {
-        MOBILE,
-        OTHER,
-        NONE
+    private static boolean isConnectedWifi(Context context) {
+        NetworkInfo info = getNetworkInfo(context);
+        return info != null && info.isConnected() && info.getType() == 1;
+    }
+
+    private static boolean isConnectedMobile(Context context) {
+        NetworkInfo info = getNetworkInfo(context);
+        return info != null && info.isConnected() && info.getType() == 0;
     }
 
 }

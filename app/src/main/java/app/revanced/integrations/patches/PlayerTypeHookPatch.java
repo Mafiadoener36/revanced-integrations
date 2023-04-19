@@ -2,8 +2,8 @@ package app.revanced.integrations.patches;
 
 import androidx.annotation.Nullable;
 
-import app.revanced.integrations.shared.PlayerType;
 import app.revanced.integrations.utils.LogHelper;
+import app.revanced.integrations.shared.PlayerType;
 
 /**
  * Hook receiver class for 'player-type-hook' patch
@@ -24,9 +24,7 @@ public class PlayerTypeHookPatch {
 
         // update current player type
         final PlayerType newType = PlayerType.safeParseFromString(type.toString());
-        if (newType == null) {
-            LogHelper.printException(() -> "Unknown PlayerType encountered: " + type);
-        } else {
+        if (newType != null) {
             PlayerType.setCurrent(newType);
             LogHelper.printDebug(() -> "YouTubePlayerOverlaysLayout player type was updated to " + newType);
         }
