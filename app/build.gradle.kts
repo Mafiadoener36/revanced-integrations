@@ -1,6 +1,3 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,29 +5,31 @@ plugins {
 
 android {
     compileSdk = 33
-    buildToolsVersion = "33.0.0"
+    buildToolsVersion = "33.0.1"
     namespace = "app.revanced.integrations"
 
     defaultConfig {
         applicationId = "app.revanced.integrations"
         minSdk = 23
         targetSdk = 33
-        versionCode = 1
-        versionName = "1.0"
         multiDexEnabled = false
-
-        val properties = Properties()
-        if (rootProject.file("local.properties").exists()) {
-            properties.load(FileInputStream(rootProject.file("local.properties")))
-        }
-
-        buildConfigField("String", "YT_API_KEY", "\"${properties.getProperty("youtubeAPIKey", "")}\"")
+        versionName = project.version as String
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        applicationVariants.all {
+            outputs.all {
+                this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+
+                outputFileName = "${rootProject.name}-$versionName.apk"
+            }
         }
     }
     compileOptions {
@@ -44,8 +43,10 @@ android {
 
 dependencies {
     compileOnly(project(mapOf("path" to ":dummy")))
-    compileOnly("androidx.annotation:annotation:1.5.0")
-    compileOnly("androidx.appcompat:appcompat:1.5.1")
-    compileOnly("com.squareup.okhttp3:okhttp:4.10.0")
+    compileOnly("androidx.annotation:annotation:1.6.0")
+    compileOnly("androidx.appcompat:appcompat:1.7.0-alpha02")
+    compileOnly("com.squareup.okhttp3:okhttp:5.0.0-alpha.11")
     compileOnly("com.squareup.retrofit2:retrofit:2.9.0")
 }
+
+tasks.register("publish") { dependsOn("build") }

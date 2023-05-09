@@ -1,165 +1,168 @@
 package app.revanced.integrations.patches.playback.quality;
 
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.widget.Toast;
+import static app.revanced.integrations.utils.ReVancedUtils.NetworkType;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.List;
 
 import app.revanced.integrations.settings.SettingsEnum;
 import app.revanced.integrations.utils.LogHelper;
 import app.revanced.integrations.utils.ReVancedUtils;
-import app.revanced.integrations.utils.SharedPrefHelper;
 
 public class RememberVideoQualityPatch {
+    private static final int AUTOMATIC_VIDEO_QUALITY_VALUE = -2;
+    private static final SettingsEnum wifiQualitySetting = SettingsEnum.VIDEO_QUALITY_DEFAULT_WIFI;
+    private static final SettingsEnum mobileQualitySetting = SettingsEnum.VIDEO_QUALITY_DEFAULT_MOBILE;
 
-    public static int selectedQuality1 = -2;
-    private static Boolean newVideo = false;
-    private static Boolean userChangedQuality = false;
+    private static boolean qualityNeedsUpdating;
+    @Nullable
+    private static String currentVideoId;
 
-    public static void changeDefaultQuality(int defaultQuality) {
-        Context context = ReVancedUtils.getContext();
-        if (isConnectedWifi(context)) {
-            try {
-                SharedPrefHelper.saveString(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "wifi_quality", defaultQuality + "");
-            } catch (Exception ex) {
-                LogHelper.printException(() -> ("Failed to change default WI-FI quality:" + ex));
-                Toast.makeText(context, "Failed to change default WI-FI quality:", Toast.LENGTH_SHORT).show();
-            }
-            LogHelper.printDebug(() -> "Changing default Wi-Fi quality to: " + defaultQuality);
-            Toast.makeText(context, "Changing default Wi-Fi quality to: " + defaultQuality, Toast.LENGTH_SHORT).show();
-        } else if (isConnectedMobile(context)) {
-            try {
-                SharedPrefHelper.saveString(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "mobile_quality", defaultQuality + "");
-            } catch (Exception ex) {
-                LogHelper.printDebug(() -> "Failed to change default mobile data quality" + ex);
-                Toast.makeText(context, "Failed to change default mobile data quality", Toast.LENGTH_SHORT).show();
-            }
-            LogHelper.printDebug(() -> "Changing default mobile data quality to:" + defaultQuality);
-            Toast.makeText(context, "Changing default mobile data quality to:" + defaultQuality, Toast.LENGTH_SHORT).show();
-        } else {
-            LogHelper.printDebug(() -> "No internet connection.");
-            Toast.makeText(context, "No internet connection.", Toast.LENGTH_SHORT).show();
+    /**
+     * If the user selected a new quality from the flyout menu,
+     * and {@link SettingsEnum#VIDEO_QUALITY_REMEMBER_LAST_SELECTED} is enabled.
+     */
+    private static boolean userChangedDefaultQuality;
+
+    /**
+     * Index of the video quality chosen by the user from the flyout menu.
+     */
+    private static int userSelectedQualityIndex;
+
+    /**
+     * The available qualities of the current video in human readable form: [1080, 720, 480]
+     */
+    @Nullable
+    private static List<Integer> videoQualities;
+
+    private static void changeDefaultQuality(int defaultQuality) {
+        NetworkType networkType = ReVancedUtils.getNetworkType();
+        if (networkType == NetworkType.NONE) {
+            ReVancedUtils.showToastShort("No internet connection");
+            return;
         }
-        userChangedQuality = false;
+        String networkTypeMessage;
+        if (networkType == NetworkType.MOBILE) {
+            mobileQualitySetting.saveValue(defaultQuality);
+            networkTypeMessage = "mobile";
+        } else {
+            wifiQualitySetting.saveValue(defaultQuality);
+            networkTypeMessage = "Wi-Fi";
+        }
+        ReVancedUtils.showToastShort("Changed default " + networkTypeMessage
+                + " quality to: " + defaultQuality +"p");
     }
 
-    public static int setVideoQuality(Object[] qualities, int quality, Object qInterface, String qIndexMethod) {
-        int preferredQuality;
-        Field[] fields;
-        if (!(newVideo || userChangedQuality) || qInterface == null) {
-            return quality;
-        }
-        Class<?> intType = Integer.TYPE;
-        ArrayList<Integer> iStreamQualities = new ArrayList<>();
+    /**
+     * Injection point.
+     *
+     * @param qualities Video qualities available, ordered from largest to smallest, with index 0 being the 'automatic' value of -2
+     * @param originalQualityIndex quality index to use, as chosen by YouTube
+     */
+    public static int setVideoQuality(Object[] qualities, final int originalQualityIndex, Object qInterface, String qIndexMethod) {
         try {
-            for (Object streamQuality : qualities) {
-                for (Field field : streamQuality.getClass().getFields()) {
-                    if (field.getType().isAssignableFrom(intType)) {  // converts quality index to actual readable resolution
-                        int value = field.getInt(streamQuality);
-                        if (field.getName().length() <= 2) {
-                            iStreamQualities.add(value);
+            if (!(qualityNeedsUpdating || userChangedDefaultQuality) || qInterface == null) {
+                return originalQualityIndex;
+            }
+            qualityNeedsUpdating = false;
+
+            final int preferredQuality;
+            if (ReVancedUtils.getNetworkType() == NetworkType.MOBILE) {
+                preferredQuality = mobileQualitySetting.getInt();
+            } else {
+                preferredQuality = wifiQualitySetting.getInt();
+            }
+            if (!userChangedDefaultQuality && preferredQuality == AUTOMATIC_VIDEO_QUALITY_VALUE) {
+                return originalQualityIndex; // nothing to do
+            }
+
+            if (videoQualities == null || videoQualities.size() != qualities.length) {
+                videoQualities = new ArrayList<>(qualities.length);
+                for (Object streamQuality : qualities) {
+                    for (Field field : streamQuality.getClass().getFields()) {
+                        if (field.getType().isAssignableFrom(Integer.TYPE)
+                                && field.getName().length() <= 2) {
+                            videoQualities.add(field.getInt(streamQuality));
                         }
                     }
                 }
+                LogHelper.printDebug(() -> "VideoId: " + currentVideoId + " videoQualities: " + videoQualities);
             }
-        } catch (Exception ignored) {
-        }
-        Collections.sort(iStreamQualities);
-        int index = 0;
-        if (userChangedQuality) {
-            for (int convertedQuality : iStreamQualities) {
-                int selectedQuality2 = qualities.length - selectedQuality1 + 1;
-                index++;
-                if (selectedQuality2 == index) {
-                    final int indexToLog = index; // must be final for lambda
-                    LogHelper.printDebug(() -> "Quality index is: " + indexToLog + " and corresponding value is: " + convertedQuality);
-                    changeDefaultQuality(convertedQuality);
-                    return selectedQuality2;
+
+            if (userChangedDefaultQuality) {
+                userChangedDefaultQuality = false;
+                final int quality = videoQualities.get(userSelectedQualityIndex);
+                LogHelper.printDebug(() -> "User changed default quality to: " + quality);
+                changeDefaultQuality(quality);
+                return userSelectedQualityIndex;
+            }
+
+            // find the highest quality that is equal to or less than the preferred
+            int qualityToUse = videoQualities.get(0); // first element is automatic mode
+            int qualityIndexToUse = 0;
+            int i = 0;
+            for (Integer quality : videoQualities) {
+                if (quality <= preferredQuality && qualityToUse < quality)  {
+                    qualityToUse = quality;
+                    qualityIndexToUse = i;
                 }
+                i++;
             }
-        }
-        newVideo = false;
-        final int qualityToLog = quality;
-        LogHelper.printDebug(() -> "Quality: " + qualityToLog);
-        Context context = ReVancedUtils.getContext();
-        if (context == null) {
-            LogHelper.printException(() -> ("Context is null or settings not initialized, returning quality: " + qualityToLog));
-            return quality;
-        }
-        if (isConnectedWifi(context)) {
-            preferredQuality = SharedPrefHelper.getInt(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "wifi_quality", -2);
-            LogHelper.printDebug(() -> "Wi-Fi connection detected, preferred quality: " + preferredQuality);
-        } else if (isConnectedMobile(context)) {
-            preferredQuality = SharedPrefHelper.getInt(context, SharedPrefHelper.SharedPrefNames.REVANCED_PREFS, "mobile_quality", -2);
-            LogHelper.printDebug(() -> "Mobile data connection detected, preferred quality: " + preferredQuality);
-        } else {
-            LogHelper.printDebug(() -> "No Internet connection!");
-            return quality;
-        }
-        if (preferredQuality == -2) {
-            return quality;
-        }
-        for (int streamQuality2 : iStreamQualities) {
-            final int indexToLog = index;
-            LogHelper.printDebug(() -> "Quality at index " + indexToLog + ": " + streamQuality2);
-            index++;
-        }
-        for (Integer iStreamQuality : iStreamQualities) {
-            int streamQuality3 = iStreamQuality;
-            if (streamQuality3 <= preferredQuality) {
-                quality = streamQuality3;
+            if (qualityIndexToUse == originalQualityIndex) {
+                LogHelper.printDebug(() -> "Video is already preferred quality: " + preferredQuality);
+                return originalQualityIndex;
             }
-        }
-        if (quality == -2) {
-            return quality;
-        }
-        int qualityIndex = iStreamQualities.indexOf(quality);
-        final int qualityToLog2 = quality;
-        LogHelper.printDebug(() -> "Index of quality " + qualityToLog2 + " is " + qualityIndex);
-        try {
-            Class<?> cl = qInterface.getClass();
-            Method m = cl.getMethod(qIndexMethod, Integer.TYPE);
-            LogHelper.printDebug(() -> "Method is: " + qIndexMethod);
-            m.invoke(qInterface, iStreamQualities.get(qualityIndex));
-            LogHelper.printDebug(() -> "Quality changed to: " + qualityIndex);
-            return qualityIndex;
+
+            final int qualityToUseLog = qualityToUse;
+            LogHelper.printDebug(() -> "Quality changed from: "
+                    + videoQualities.get(originalQualityIndex) + " to: " + qualityToUseLog);
+
+            Method m = qInterface.getClass().getMethod(qIndexMethod, Integer.TYPE);
+            m.invoke(qInterface, qualityToUse);
+            return qualityIndexToUse;
         } catch (Exception ex) {
-            LogHelper.printException(() -> ("Failed to set quality"), ex);
-            Toast.makeText(context, "Failed to set quality", Toast.LENGTH_SHORT).show();
-            return qualityIndex;
+            LogHelper.printException(() -> "Failed to set quality", ex);
+            return originalQualityIndex;
         }
     }
 
+    /**
+     * Injection point.
+     */
     public static void userChangedQuality(int selectedQuality) {
-        // Do not remember a **new** quality if REMEMBER_VIDEO_QUALITY is false
-        if (SettingsEnum.REMEMBER_VIDEO_QUALITY_LAST_SELECTED.getBoolean() == false) return;
+        if (!SettingsEnum.VIDEO_QUALITY_REMEMBER_LAST_SELECTED.getBoolean()) return;
 
-        selectedQuality1 = selectedQuality;
-        userChangedQuality = true;
+        userSelectedQualityIndex = selectedQuality;
+        userChangedDefaultQuality = true;
     }
 
-    public static void newVideoStarted(String videoId) {
-        newVideo = true;
-    }
+    /**
+     * Injection point.
+     */
+    public static void newVideoStarted(@NonNull String videoId) {
+        // The same videoId can be passed in multiple times for a single video playback.
+        // Such as closing and opening the app, and sometimes when turning off/on the device screen.
+        //
+        // Known limitation, if:
+        // 1. a default video quality exists, and remember quality is turned off
+        // 2. user opens a video
+        // 3. user changes the video quality
+        // 4. user turns off then on the device screen (or does anything else that triggers the video id hook)
+        // result: the video quality of the current video will revert back to the saved default
+        //
+        // qualityNeedsUpdating could be set only when the videoId changes
+        // but then if the user closes and re-opens the same video the default video quality will not be applied.
+        LogHelper.printDebug(() -> "newVideoStarted: " + videoId);
+        qualityNeedsUpdating = true;
 
-    private static NetworkInfo getNetworkInfo(Context context) {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        return cm.getActiveNetworkInfo();
+        if (!videoId.equals(currentVideoId)) {
+            currentVideoId = videoId;
+            videoQualities = null;
+        }
     }
-
-    private static boolean isConnectedWifi(Context context) {
-        NetworkInfo info = getNetworkInfo(context);
-        return info != null && info.isConnected() && info.getType() == 1;
-    }
-
-    private static boolean isConnectedMobile(Context context) {
-        NetworkInfo info = getNetworkInfo(context);
-        return info != null && info.isConnected() && info.getType() == 0;
-    }
-
 }

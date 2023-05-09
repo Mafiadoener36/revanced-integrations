@@ -1,6 +1,6 @@
 package app.revanced.integrations.settingsmenu;
 
-import static app.revanced.integrations.sponsorblock.StringRef.str;
+import static app.revanced.integrations.utils.StringRef.str;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -15,48 +15,39 @@ import android.preference.SwitchPreference;
 import app.revanced.integrations.returnyoutubedislike.ReturnYouTubeDislike;
 import app.revanced.integrations.returnyoutubedislike.requests.ReturnYouTubeDislikeApi;
 import app.revanced.integrations.settings.SettingsEnum;
-import app.revanced.integrations.utils.SharedPrefHelper;
+import app.revanced.integrations.settings.SharedPrefCategory;
 
 public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
 
     /**
-     * If ReturnYouTubeDislike is enabled
-     */
-    private SwitchPreference enabledPreference;
-
-    /**
-     * If dislikes are shown as percentage
+     * If dislikes are shown as percentage.
      */
     private SwitchPreference percentagePreference;
 
+    /**
+     * If segmented like/dislike button uses smaller compact layout.
+     */
+    private SwitchPreference compactLayoutPreference;
+
     private void updateUIState() {
-        final boolean rydIsEnabled = SettingsEnum.RYD_ENABLED.getBoolean();
-        final boolean dislikePercentageEnabled = SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getBoolean();
-
-        enabledPreference.setSummary(rydIsEnabled
-                ? str("revanced_ryd_enable_summary_on")
-                : str("revanced_ryd_enable_summary_off"));
-
-        percentagePreference.setSummary(dislikePercentageEnabled
-                ? str("revanced_ryd_dislike_percentage_summary_on")
-                : str("revanced_ryd_dislike_percentage_summary_off"));
-        percentagePreference.setEnabled(rydIsEnabled);
+        percentagePreference.setEnabled(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.isAvailable());
+        compactLayoutPreference.setEnabled(SettingsEnum.RYD_USE_COMPACT_LAYOUT.isAvailable());
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getPreferenceManager().setSharedPreferencesName(SharedPrefHelper.SharedPrefNames.RYD.getName());
+        getPreferenceManager().setSharedPreferencesName(SharedPrefCategory.RETURN_YOUTUBE_DISLIKE.prefName);
 
         Activity context = this.getActivity();
         PreferenceScreen preferenceScreen = getPreferenceManager().createPreferenceScreen(context);
         setPreferenceScreen(preferenceScreen);
 
-        enabledPreference = new SwitchPreference(context);
-        enabledPreference.setKey(SettingsEnum.RYD_ENABLED.getPath());
-        enabledPreference.setDefaultValue(SettingsEnum.RYD_ENABLED.getDefaultValue());
+        SwitchPreference enabledPreference = new SwitchPreference(context);
         enabledPreference.setChecked(SettingsEnum.RYD_ENABLED.getBoolean());
         enabledPreference.setTitle(str("revanced_ryd_enable_title"));
+        enabledPreference.setSummaryOn(str("revanced_ryd_enable_summary_on"));
+        enabledPreference.setSummaryOff(str("revanced_ryd_enable_summary_off"));
         enabledPreference.setOnPreferenceChangeListener((pref, newValue) -> {
             final boolean rydIsEnabled = (Boolean) newValue;
             SettingsEnum.RYD_ENABLED.saveValue(rydIsEnabled);
@@ -68,17 +59,30 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
         preferenceScreen.addPreference(enabledPreference);
 
         percentagePreference = new SwitchPreference(context);
-        percentagePreference.setKey(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getPath());
-        percentagePreference.setDefaultValue(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getDefaultValue());
         percentagePreference.setChecked(SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.getBoolean());
         percentagePreference.setTitle(str("revanced_ryd_dislike_percentage_title"));
+        percentagePreference.setSummaryOn(str("revanced_ryd_dislike_percentage_summary_on"));
+        percentagePreference.setSummaryOff(str("revanced_ryd_dislike_percentage_summary_off"));
         percentagePreference.setOnPreferenceChangeListener((pref, newValue) -> {
-            SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.saveValue((Boolean)newValue);
-
+            SettingsEnum.RYD_SHOW_DISLIKE_PERCENTAGE.saveValue(newValue);
+            ReturnYouTubeDislike.clearCache();
             updateUIState();
             return true;
         });
         preferenceScreen.addPreference(percentagePreference);
+
+        compactLayoutPreference = new SwitchPreference(context);
+        compactLayoutPreference.setChecked(SettingsEnum.RYD_USE_COMPACT_LAYOUT.getBoolean());
+        compactLayoutPreference.setTitle(str("revanced_ryd_compact_layout_title"));
+        compactLayoutPreference.setSummaryOn(str("revanced_ryd_compact_layout_summary_on"));
+        compactLayoutPreference.setSummaryOff(str("revanced_ryd_compact_layout_summary_off"));
+        compactLayoutPreference.setOnPreferenceChangeListener((pref, newValue) -> {
+            SettingsEnum.RYD_USE_COMPACT_LAYOUT.saveValue(newValue);
+            ReturnYouTubeDislike.clearCache();
+            updateUIState();
+            return true;
+        });
+        preferenceScreen.addPreference(compactLayoutPreference);
 
         updateUIState();
 
@@ -86,7 +90,7 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
         // About category
 
         PreferenceCategory aboutCategory = new PreferenceCategory(context);
-        aboutCategory.setTitle(str("about"));
+        aboutCategory.setTitle(str("revanced_ryd_about"));
         preferenceScreen.addPreference(aboutCategory);
 
         // ReturnYouTubeDislike Website
@@ -171,7 +175,7 @@ public class ReturnYouTubeDislikeSettingsFragment extends PreferenceFragment {
         }
     }
 
-    private String createSummaryText(int value, String summaryStringZeroKey, String summaryStringOneOrMoreKey) {
+    private static String createSummaryText(int value, String summaryStringZeroKey, String summaryStringOneOrMoreKey) {
         if (value == 0) {
             return str(summaryStringZeroKey);
         }
