@@ -2,6 +2,7 @@ package app.revanced.integrations.youtube.patches.components;
 
 import static app.revanced.integrations.youtube.shared.NavigationBar.NavigationButton;
 
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.view.View;
 
@@ -80,7 +81,11 @@ public final class LayoutComponentsFilter extends Filter {
         final var communityPosts = new StringFilterGroup(
                 Settings.HIDE_COMMUNITY_POSTS,
                 "post_base_wrapper",
-                "image_post_root.eml"
+                "text_post_root.eml",
+                "images_post_root.eml",
+                "images_post_slim.eml",
+                "text_post_root_slim.eml",
+                "post_base_wrapper_slim.eml"
         );
 
         final var communityGuidelines = new StringFilterGroup(
@@ -141,10 +146,8 @@ public final class LayoutComponentsFilter extends Filter {
         );
 
         // The player audio track button does the exact same function as the audio track flyout menu option.
-        // But if the copy url button is shown, these button clashes and the the audio button does not work.
         // Previously this was a setting to show/hide the player button.
         // But it was decided it's simpler to always hide this button because:
-        // - it doesn't work with copy video url feature
         // - the button is rare
         // - always hiding makes the ReVanced settings simpler and easier to understand
         // - nobody is going to notice the redundant button is always hidden
@@ -163,11 +166,6 @@ public final class LayoutComponentsFilter extends Filter {
                 "inline_expander"
         );
 
-        final var videoQualityMenuFooter = new StringFilterGroup(
-                Settings.HIDE_VIDEO_QUALITY_MENU_FOOTER,
-                "quality_sheet_footer"
-        );
-
         final var channelBar = new StringFilterGroup(
                 Settings.HIDE_CHANNEL_BAR,
                 "channel_bar"
@@ -180,7 +178,8 @@ public final class LayoutComponentsFilter extends Filter {
 
         final var playables = new StringFilterGroup(
                 Settings.HIDE_PLAYABLES,
-                "horizontal_gaming_shelf.eml"
+                "horizontal_gaming_shelf.eml",
+                "mini_game_card.eml"
         );
 
         final var quickActions = new StringFilterGroup(
@@ -254,6 +253,7 @@ public final class LayoutComponentsFilter extends Filter {
                 Settings.HIDE_HORIZONTAL_SHELVES,
                 "horizontal_video_shelf.eml",
                 "horizontal_shelf.eml",
+                "horizontal_shelf_inline.eml",
                 "horizontal_tile_shelf.eml"
         );
 
@@ -275,7 +275,6 @@ public final class LayoutComponentsFilter extends Filter {
                 compactBanner,
                 compactChannelBarInner,
                 medicalPanel,
-                videoQualityMenuFooter,
                 infoPanel,
                 emergencyBox,
                 subscribersCommunityGuidelines,
@@ -383,6 +382,21 @@ public final class LayoutComponentsFilter extends Filter {
         return !Settings.HIDE_VIDEO_CHANNEL_WATERMARK.get();
     }
 
+
+    private static final boolean HIDE_DOODLES_ENABLED = Settings.HIDE_DOODLES.get();
+
+    /**
+     * Injection point.
+     */
+    @Nullable
+    public static Drawable hideYoodles(Drawable animatedYoodle) {
+        if (HIDE_DOODLES_ENABLED) {
+            return null;
+        }
+
+        return animatedYoodle;
+    }
+
     private static final boolean HIDE_SHOW_MORE_BUTTON_ENABLED = Settings.HIDE_SHOW_MORE_BUTTON.get();
 
     /**
@@ -409,7 +423,6 @@ public final class LayoutComponentsFilter extends Filter {
         // Check navigation button last.
         // Only filter if the library tab is not selected.
         // This check is important as the shelf layout is used for the library tab playlists.
-        NavigationButton selectedNavButton = NavigationButton.getSelectedNavigationButton();
-        return selectedNavButton != null && !selectedNavButton.isLibraryOrYouTab();
+        return NavigationButton.getSelectedNavigationButton() != NavigationButton.LIBRARY;
     }
 }

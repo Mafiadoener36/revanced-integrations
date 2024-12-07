@@ -1,6 +1,7 @@
 package app.revanced.integrations.shared;
 
 import android.annotation.SuppressLint;
+import android.app.*;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -8,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.Preference;
@@ -54,6 +56,7 @@ public class Utils {
      *
      * @return The manifest 'Version' entry of the patches.jar used during patching.
      */
+    @SuppressWarnings("SameReturnValue")
     public static String getPatchesReleaseVersion() {
         return ""; // Value is replaced during patching.
     }
@@ -263,6 +266,20 @@ public class Utils {
     }
 
     /**
+     * Includes sub children.
+     *
+     * @noinspection unchecked
+     */
+    public static <R extends View> R getChildViewByResourceName(@NonNull View view, @NonNull String str) {
+        var child = view.findViewById(Utils.getResourceIdentifier(str, "id"));
+        if (child != null) {
+            return (R) child;
+        }
+
+        throw new IllegalArgumentException("View with resource name '" + str + "' not found");
+    }
+
+    /**
      * @param searchRecursively If children ViewGroups should also be
      *                          recursively searched using depth first search.
      * @return The first child view that matches the filter.
@@ -272,7 +289,6 @@ public class Utils {
                                                   @NonNull MatchFilter<View> filter) {
         for (int i = 0, childCount = viewGroup.getChildCount(); i < childCount; i++) {
             View childAt = viewGroup.getChildAt(i);
-            Logger.printDebug(() -> "View id: " + childAt.getId() + " tag: " + childAt.getTag());
 
             if (filter.matches(childAt)) {
                 //noinspection unchecked
@@ -284,6 +300,7 @@ public class Utils {
                 if (match != null) return match;
             }
         }
+
         return null;
     }
 
@@ -360,6 +377,99 @@ public class Utils {
             isRightToLeftTextLayout = new Bidi(displayLanguage, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).isRightToLeft();
         }
         return isRightToLeftTextLayout;
+    }
+
+    /**
+     * @return if the text contains at least 1 number character,
+     *         including any unicode numbers such as Arabic.
+     */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
+    public static boolean containsNumber(@NonNull CharSequence text) {
+        for (int index = 0, length = text.length(); index < length;) {
+            final int codePoint = Character.codePointAt(text, index);
+            if (Character.isDigit(codePoint)) {
+                return true;
+            }
+            index += Character.charCount(codePoint);
+        }
+
+        return false;
+    }
+
+    /**
+     * Ignore this class. It must be public to satisfy Android requirements.
+     */
+    @SuppressWarnings("deprecation")
+    public static final class DialogFragmentWrapper extends DialogFragment {
+
+        private Dialog dialog;
+        @Nullable
+        private DialogFragmentOnStartAction onStartAction;
+
+        @Override
+        public void onSaveInstanceState(Bundle outState) {
+            // Do not call super method to prevent state saving.
+        }
+
+        @NonNull
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            return dialog;
+        }
+
+        @Override
+        public void onStart() {
+            try {
+                super.onStart();
+
+                if (onStartAction != null) {
+                    onStartAction.onStart((AlertDialog) getDialog());
+                }
+            } catch (Exception ex) {
+                Logger.printException(() -> "onStart failure: " + dialog.getClass().getSimpleName(), ex);
+            }
+        }
+    }
+
+    /**
+     * Interface for {@link #showDialog(Activity, AlertDialog, boolean, DialogFragmentOnStartAction)}.
+     */
+    @FunctionalInterface
+    public interface DialogFragmentOnStartAction {
+        void onStart(AlertDialog dialog);
+    }
+
+    public static void showDialog(Activity activity, AlertDialog dialog) {
+        showDialog(activity, dialog, true, null);
+    }
+
+    /**
+     * Utility method to allow showing an AlertDialog on top of other alert dialogs.
+     * Calling this will always display the dialog on top of all other dialogs
+     * previously called using this method.
+     * <br>
+     * Be aware the on start action can be called multiple times for some situations,
+     * such as the user switching apps without dismissing the dialog then switching back to this app.
+     *<br>
+     * This method is only useful during app startup and multiple patches may show their own dialog,
+     * and the most important dialog can be called last (using a delay) so it's always on top.
+     *<br>
+     * For all other situations it's better to not use this method and
+     * call {@link AlertDialog#show()} on the dialog.
+     */
+    @SuppressWarnings("deprecation")
+    public static void showDialog(Activity activity,
+                                  AlertDialog dialog,
+                                  boolean isCancelable,
+                                  @Nullable DialogFragmentOnStartAction onStartAction) {
+        verifyOnMainThread();
+
+        DialogFragmentWrapper fragment = new DialogFragmentWrapper();
+        fragment.dialog = dialog;
+        fragment.onStartAction = onStartAction;
+        fragment.setCancelable(isCancelable);
+
+        fragment.show(activity.getFragmentManager(), null);
     }
 
     /**
@@ -609,6 +719,23 @@ public class Utils {
             }
 
             pref.setOrder(order);
+        }
+    }
+
+    /**
+     * If {@link Fragment} uses [Android library] rather than [AndroidX library],
+     * the Dialog theme corresponding to [Android library] should be used.
+     * <p>
+     * If not, the following issues will occur:
+     * <a href="https://github.com/ReVanced/revanced-patches/issues/3061">ReVanced/revanced-patches#3061</a>
+     * <p>
+     * To prevent these issues, apply the Dialog theme corresponding to [Android library].
+     */
+    public static void setEditTextDialogTheme(AlertDialog.Builder builder) {
+        final int editTextDialogStyle = getResourceIdentifier(
+                "revanced_edit_text_dialog_style", "style");
+        if (editTextDialogStyle != 0) {
+            builder.getContext().setTheme(editTextDialogStyle);
         }
     }
 }
